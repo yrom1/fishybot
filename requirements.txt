@@ -1,0 +1,5 @@
+mypy
+black
+isort
+discord.py
+discord.py-stubs
