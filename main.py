@@ -6,12 +6,15 @@ import random
 from configparser import ConfigParser
 from datetime import datetime, timedelta
 from functools import wraps
+from textwrap import dedent
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, Union
 
 import discord
+from discord import user
 from discord.ext import commands
 from discord.utils import escape_markdown
 from mysql.connector import Error, MySQLConnection, connect
+from prettytable import PrettyTable
 
 
 def config(filename="config.ini", section="mysql") -> Dict[str, str]:
@@ -51,7 +54,9 @@ def execute(
     return result
 
 
-bot = commands.Bot(command_prefix="$")
+intents = discord.Intents.default()
+intents.members = True
+bot = commands.Bot(command_prefix="$", intents=intents)
 
 
 def fish_common():
@@ -148,9 +153,14 @@ TRASH_ICONS = [
 @bot.command(aliases=["fish", "fihy", "fisy", "foshy", "fisyh", "fsihy", "fin"])
 async def fishy(ctx, user=None):
     """Go fishing."""
+
+    # --- can we fish? ---
     fish_time = datetime.now()
     last_fish_time = execute(
-        "select max(fish_time) from fish where fisher_id = %s",
+        """
+        SELECT MAX(fish_time)
+        FROM fish
+        WHERE fisher_id = %s""",
         tuple([ctx.message.author.id]),
     )
     last_fish_time = last_fish_time[0][0]
@@ -163,16 +173,34 @@ async def fishy(ctx, user=None):
         )
         return
 
+    # --- we can fish! ---
     fish_time = fish_time.strftime("%Y-%m-%d %H:%M:%S")
     catch = random.choices(list(FISHTYPES.keys()), WEIGHTS)[0]
     fish_amount = FISHTYPES[catch]()
     execute(
-        "insert into fish (fisher_id, fish_time, fish_amount) values (%s, %s, %s)",
+        """
+        INSERT INTO fish (fisher_id, fish_time, fish_amount)
+        VALUES (%s, %s, %s)""",
         tuple([ctx.message.author.id, fish_time, fish_amount]),
     )
     # print(ctx.message.author.id)
     # print(ctx.message.author.name, "#", ctx.message.author.discriminator)
     # print(ctx.message.guild.id, ctx.message.guild.name)
+    execute(
+        """
+        INSERT INTO users (user_id, name, discriminator)
+        VALUES (%(user_id)s, %(name)s, %(discriminator)s)
+        ON DUPLICATE KEY UPDATE
+            name = %(name)s,
+            discriminator = %(discriminator)s
+        """,
+        {
+            "user_id": ctx.message.author.id,
+            "name": ctx.message.author.name,
+            "discriminator": ctx.message.author.discriminator,
+        },
+    )
+
     if fish_amount == 0:
         await ctx.send(f"you caught trash {random.choice(TRASH_ICONS)}")
     else:
@@ -208,8 +236,29 @@ async def fishstats(ctx):
 
 
 @bot.command()
-async def getuser(ctx, *, user: discord.Member = None):
-    print(user)
+async def getuser(ctx, *, user: discord.Member = None, id: int = None):
+    if user is not None:
+        user_name = bot.get_user(user.id)  # (int(id))
+        print(f"{user_name=}")
+
+
+@bot.command()
+async def fishyboard(ctx):
+    cmd = """
+    select u.name fisher
+        , sum(f.fish_amount) `fishies`
+    from fish f
+        inner join users u
+            on f.fisher_id = u.user_id
+    group by f.fisher_id
+    order by 2
+    limit 10
+    """
+    result = execute(cmd)
+    table = PrettyTable()
+    table.field_names = ["fisher", "fishies"]
+    table.add_rows(result)
+    await ctx.send("```\n" + str(table) + "```")
 
 
 if __name__ == "__main__":
@@ -223,17 +272,14 @@ if __name__ == "__main__":
         )
     """
     )
-    # execute(
-    #     """
-    # create table if not exists users (
-    #     fisher_id bigint,
-    #     fish_time timestamp,
-    #     fish_amount int not null,
-    #     primary key(fisher_id, fish_time)
-    #     )
-    # """
-    # )
+    execute(
+        """
+    create table if not exists users (
+        user_id bigint primary key,
+        name varchar(255) not null,
+        discriminator int not null
+        )
+    """
+    )
     # TODO (os.environ["DISCORDFISH_TOKEN"])
     bot.run("OTE4OTk2OTI3OTgxNDI0NjQw.YbPYlQ.oKQNxw2xIHaGqoRMHWOghUootjE")
-
-# insert into fish values (245319276058116096, 2021-12-10 22:18:30, 999);
