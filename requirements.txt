@@ -3,3 +3,4 @@ black
 isort
 discord.py
 discord.py-stubs
+mysql-connector-python
