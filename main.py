@@ -252,7 +252,7 @@ async def fishyboard(ctx):
         inner join users u
             on f.fisher_id = u.user_id
     group by f.fisher_id
-    order by 2
+    order by sum(f.fish_amount)
     limit 10
     """
     result = execute(cmd)
