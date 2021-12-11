@@ -153,12 +153,11 @@ TRASH_ICONS = [
 ALLOWED_FISH_TIME_DELTA = timedelta(seconds=10)
 
 
-@bot.command(aliases=["fish", "fihy", "fisy", "foshy", "fisyh", "fsihy", "fin"])
+@bot.command(aliases=["fosh", "fish", "fihy", "fisy", "foshy", "fisyh", "fsihy", "fin"])
 async def fishy(ctx, user=None):
     """Go fishing."""
 
     # --- can we fish? ---
-    fish_time = datetime.now()
     last_fish_time = execute(
         """
         SELECT MAX(fish_time)
@@ -166,6 +165,7 @@ async def fishy(ctx, user=None):
         WHERE fisher_id = %s""",
         tuple([ctx.message.author.id]),
     )[0][0]
+    fish_time = datetime.now()
     if last_fish_time is not None:
         # print(f"{last_fish_time=}", f"{fish_time=}")
         # print(fish_time - last_fish_time)
