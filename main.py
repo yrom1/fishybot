@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import random
 from configparser import ConfigParser
 from datetime import datetime, timedelta
@@ -372,5 +373,4 @@ if __name__ == "__main__":
         )
     """
     )
-    # TODO (os.environ["DISCORDFISH_TOKEN"])
-    bot.run("OTE4OTk2OTI3OTgxNDI0NjQw.YbPYlQ.oKQNxw2xIHaGqoRMHWOghUootjE")
+    bot.run(os.environ["DISCORD_FISH_TOKEN"])
