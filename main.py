@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from configparser import ConfigParser
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, Union
 
@@ -48,9 +48,7 @@ def execute(
         cursor.close()
         conn.close()
 
-    if result is not None:
-        return result
-    return None
+    return result
 
 
 bot = commands.Bot(command_prefix="$")
@@ -150,20 +148,36 @@ TRASH_ICONS = [
 @bot.command(aliases=["fish", "fihy", "fisy", "foshy", "fisyh", "fsihy", "fin"])
 async def fishy(ctx, user=None):
     """Go fishing."""
+    fish_time = datetime.now()
+    last_fish_time = execute(
+        "select max(fish_time) from fish where fisher_id = %s",
+        tuple([ctx.message.author.id]),
+    )
+    last_fish_time = last_fish_time[0][0]
+    # print(f"{last_fish_time=}", f"{fish_time=}")
+    # print(fish_time - last_fish_time)
+    allowed_fish_time_delta = timedelta(seconds=10)
+    if (fish_time - last_fish_time) < allowed_fish_time_delta:
+        await ctx.send(
+            f"too fast cowboy 🏃 can fish in {(allowed_fish_time_delta - (fish_time - last_fish_time)).seconds} seconds 🎣"
+        )
+        return
+
+    fish_time = fish_time.strftime("%Y-%m-%d %H:%M:%S")
     catch = random.choices(list(FISHTYPES.keys()), WEIGHTS)[0]
-    fish = FISHTYPES[catch]()
+    fish_amount = FISHTYPES[catch]()
     execute(
-        "insert into fish (fisher_id, fish_time, fish_amount) values (%s, now(), %s)",
-        tuple([ctx.message.author.id, fish]),
+        "insert into fish (fisher_id, fish_time, fish_amount) values (%s, %s, %s)",
+        tuple([ctx.message.author.id, fish_time, fish_amount]),
     )
     # print(ctx.message.author.id)
     # print(ctx.message.author.name, "#", ctx.message.author.discriminator)
     # print(ctx.message.guild.id, ctx.message.guild.name)
-    if fish == 0:
+    if fish_amount == 0:
         await ctx.send(f"you caught trash {random.choice(TRASH_ICONS)}")
     else:
         await ctx.send(
-            f"you caught {fish} {catch} fishy {(lambda x: '🐟' if x=='' else x)('🐟' * int(fish // 10))}"
+            f"you caught {fish_amount} {catch} fishy {(lambda x: '🐟' if x=='' else x)('🐟' * int(fish_amount // 10))}"
         )
 
 
@@ -172,6 +186,30 @@ async def globalfishstats(ctx):
     query = execute("select sum(fish_amount) from fish")[0][0]
     if query is not None:
         await ctx.send(f"{query} digital fishy fished 🎣")
+
+
+@bot.command(
+    aliases=[
+        "fihystats",
+        "fisystats",
+        "foshystats",
+        "fisyhstats",
+        "fsihystats",
+        "finstats",
+    ]
+)
+async def fishstats(ctx):
+    query = execute(
+        "select sum(fish_amount) from fish where fisher_id = %s",
+        tuple([ctx.message.author.id]),
+    )[0][0]
+    if query is not None:
+        await ctx.send(f"(you)'ve fished {query} digital fishy 🎣")
+
+
+@bot.command()
+async def getuser(ctx, *, user: discord.Member = None):
+    print(user)
 
 
 if __name__ == "__main__":
@@ -185,5 +223,17 @@ if __name__ == "__main__":
         )
     """
     )
+    # execute(
+    #     """
+    # create table if not exists users (
+    #     fisher_id bigint,
+    #     fish_time timestamp,
+    #     fish_amount int not null,
+    #     primary key(fisher_id, fish_time)
+    #     )
+    # """
+    # )
     # TODO (os.environ["DISCORDFISH_TOKEN"])
     bot.run("OTE4OTk2OTI3OTgxNDI0NjQw.YbPYlQ.oKQNxw2xIHaGqoRMHWOghUootjE")
+
+# insert into fish values (245319276058116096, 2021-12-10 22:18:30, 999);
