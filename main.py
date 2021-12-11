@@ -1,11 +1,12 @@
 """fishy <==<3"""
+
 from __future__ import annotations
 
 import random
 from configparser import ConfigParser
 from datetime import datetime
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, Union
 
 import discord
 from discord.ext import commands
@@ -28,7 +29,7 @@ def config(filename="config.ini", section="mysql") -> Dict[str, str]:
 
 
 def execute(
-    command: str, data: Tuple[Any, ...] = tuple()
+    command: str, data: Tuple[Union[str, int], ...] = tuple()
 ) -> Optional[List[Tuple[Any, ...]]]:
     result = None
     try:
@@ -151,7 +152,13 @@ async def fishy(ctx, user=None):
     """Go fishing."""
     catch = random.choices(list(FISHTYPES.keys()), WEIGHTS)[0]
     fish = FISHTYPES[catch]()
-    execute("insert into fish (amount) values (%s)", tuple([fish]))
+    execute(
+        "insert into fish (fisher_id, fish_time, fish_amount) values (%s, now(), %s)",
+        tuple([ctx.message.author.id, fish]),
+    )
+    # print(ctx.message.author.id)
+    # print(ctx.message.author.name, "#", ctx.message.author.discriminator)
+    # print(ctx.message.guild.id, ctx.message.guild.name)
     if fish == 0:
         await ctx.send(f"you caught trash {random.choice(TRASH_ICONS)}")
     else:
@@ -162,12 +169,21 @@ async def fishy(ctx, user=None):
 
 @bot.command()
 async def globalfishstats(ctx):
-    query = execute("select sum(amount) from fish")[0][0]
+    query = execute("select sum(fish_amount) from fish")[0][0]
     if query is not None:
         await ctx.send(f"{query} digital fishy fished 🎣")
 
 
 if __name__ == "__main__":
-    bot.run(
-        "OTE4OTk2OTI3OTgxNDI0NjQw.YbPYlQ.oKQNxw2xIHaGqoRMHWOghUootjE"
-    )  # (os.environ["DISCORDFISH_TOKEN"])
+    execute(
+        """
+    create table if not exists fish (
+        fisher_id bigint,
+        fish_time timestamp,
+        fish_amount int not null,
+        primary key(fisher_id, fish_time)
+        )
+    """
+    )
+    # TODO (os.environ["DISCORDFISH_TOKEN"])
+    bot.run("OTE4OTk2OTI3OTgxNDI0NjQw.YbPYlQ.oKQNxw2xIHaGqoRMHWOghUootjE")
