@@ -351,6 +351,18 @@ async def fishytimer(ctx):
         await ctx.send(f"you can fishy sailor!! 🚀🎣🚀")
 
 
+@bot.event
+async def on_ready():
+    fish = dedent(
+        """\
+            /"*._         _
+        .-*'`    `*-.._.-'/
+     < * ))     ,       (
+        `*-._`._(__.--*"`.\\\n"""
+    )
+    print(fish)
+
+
 if __name__ == "__main__":
     execute(
         """
