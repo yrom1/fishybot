@@ -245,8 +245,9 @@ async def getuser(ctx, *, user: discord.Member = None, id: int = None):
 @bot.command()
 async def fishyboard(ctx):
     cmd = """
-    select u.name fisher
-        , sum(f.fish_amount) `fishies`
+    select rank() over(order by sum(f.fish_amount) desc) `rank`
+        , u.name fisher
+        , sum(f.fish_amount) fishies
     from fish f
         inner join users u
             on f.fisher_id = u.user_id
@@ -256,7 +257,7 @@ async def fishyboard(ctx):
     """
     result = execute(cmd)
     table = PrettyTable()
-    table.field_names = ["fisher", "fishies"]
+    table.field_names = ["rank", "fisher", "fishies"]
     table.add_rows(result)
     await ctx.send("```\n" + str(table) + "```")
 
