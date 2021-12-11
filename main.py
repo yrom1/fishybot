@@ -32,7 +32,7 @@ def config(filename="config.ini", section="mysql") -> Dict[str, str]:
 
 
 def execute(
-    command: str, data: Tuple[Union[str, int], ...] = tuple()
+    command: str, data: Tuple[Any, ...] = tuple()
 ) -> Optional[List[Tuple[Any, ...]]]:
     result = None
     try:
@@ -59,6 +59,10 @@ intents.members = True
 bot = commands.Bot(command_prefix="$", intents=intents)
 
 
+def trash():
+    return 0
+
+
 def fish_common():
     return random.randint(1, 29)
 
@@ -73,10 +77,6 @@ def fish_rare():
 
 def fish_legendary():
     return random.randint(400, 750)
-
-
-def trash():
-    return 0
 
 
 WEIGHTS = [9, 60, 20, 10, 1]
@@ -164,15 +164,15 @@ async def fishy(ctx, user=None):
         FROM fish
         WHERE fisher_id = %s""",
         tuple([ctx.message.author.id]),
-    )
-    last_fish_time = last_fish_time[0][0]
-    # print(f"{last_fish_time=}", f"{fish_time=}")
-    # print(fish_time - last_fish_time)
-    if (fish_time - last_fish_time) < ALLOWED_FISH_TIME_DELTA:
-        await ctx.send(
-            f"too fast cowboy 🏃 can fish in {(ALLOWED_FISH_TIME_DELTA - (fish_time - last_fish_time)).seconds} seconds 🎣"
-        )
-        return
+    )[0][0]
+    if last_fish_time is not None:
+        # print(f"{last_fish_time=}", f"{fish_time=}")
+        # print(fish_time - last_fish_time)
+        if (fish_time - last_fish_time) < ALLOWED_FISH_TIME_DELTA:
+            await ctx.send(
+                f"too fast cowboy 🏃 can fish in {(ALLOWED_FISH_TIME_DELTA - (fish_time - last_fish_time)).seconds} seconds 🎣"
+            )
+            return
 
     # --- we can fish! ---
     fish_time = fish_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -203,18 +203,50 @@ async def fishy(ctx, user=None):
     )
 
     if fish_amount == 0:
-        await ctx.send(f"you caught trash {random.choice(TRASH_ICONS)}")
+        await ctx.send(f"(you) caught trash {random.choice(TRASH_ICONS)}")
     else:
         await ctx.send(
-            f"you caught {fish_amount} {catch} fishy {(lambda x: '🐟' if x=='' else x)('🐟' * int(fish_amount // 10))}"
+            f"(you) caught {fish_amount} {catch} fishy {(lambda x: '🐟' if x=='' else x)('🐟' * int(fish_amount // 10))}"
         )
 
 
 @bot.command()
 async def globalfishstats(ctx):
-    query = execute("select sum(fish_amount) from fish")[0][0]
-    if query is not None:
-        await ctx.send(f"{query} digital fishy fished 🎣")
+    query_global_count = execute(
+        "select sum(fish_amount) from fish f inner join users u on f.fisher_id = u.user_id"
+    )[0][0]
+    query_fish_type_count = execute(
+        """
+    select concat_ws('#', u.name, u.discriminator) `fisher`
+        , sum(fish_amount) `fishies`
+        , count(case when fish_amount = 0 then 'trash' else null end) `trash`
+        , count(case when fish_amount >= 1 and fish_amount <= 29 then 'common' else null end) `common`
+        , count(case when fish_amount >= 30 and fish_amount <= 99 then 'uncommon' else null end) `uncommon`
+        , count(case when fish_amount >= 100 and fish_amount <= 399 then 'rare' else null end) `rare`
+        , count(case when fish_amount >= 400 and fish_amount <= 750 then 'legendary' else null end) `legendary`
+    from fish f
+        inner join users u
+            on f.fisher_id = u.user_id
+    -- where u.user_id = %(user_id)s
+    group by fisher_id
+    order by sum(fish_amount) desc, u.name, u.discriminator""",
+        {"user_id": ctx.message.author.id},
+    )
+    table = PrettyTable()
+    table.field_names = [
+        "fisher",
+        "fishies",
+        "trash",
+        "common",
+        "uncommon",
+        "rare",
+        "legendary",
+    ]
+    table.add_rows(query_fish_type_count)
+    if query_fish_type_count is not None and query_global_count is not None:
+        await ctx.send(
+            f"{query_global_count} digital fishy fished 🎣" "```\n" + str(table) + "```"
+        )
 
 
 @bot.command(
@@ -228,12 +260,43 @@ async def globalfishstats(ctx):
     ]
 )
 async def fishstats(ctx):
-    query = execute(
+    query_fish_sum = execute(
         "select sum(fish_amount) from fish where fisher_id = %s",
         tuple([ctx.message.author.id]),
     )[0][0]
-    if query is not None:
-        await ctx.send(f"(you)'ve fished {query} digital fishy 🎣")
+    query_fish_type_count = execute(
+        """
+    select concat_ws('#', u.name, u.discriminator) `fisher`
+        , sum(fish_amount) `fishies`
+        , count(case when fish_amount = 0 then 'trash' else null end) `trash`
+        , count(case when fish_amount >= 1 and fish_amount <= 29 then 'common' else null end) `common`
+        , count(case when fish_amount >= 30 and fish_amount <= 99 then 'uncommon' else null end) `uncommon`
+        , count(case when fish_amount >= 100 and fish_amount <= 399 then 'rare' else null end) `rare`
+        , count(case when fish_amount >= 400 and fish_amount <= 750 then 'legendary' else null end) `legendary`
+    from fish f
+        inner join users u
+            on f.fisher_id = u.user_id
+    where u.user_id = %(user_id)s
+    group by fisher_id
+    -- order by sum(fish_amount) desc, u.name, u.discriminator""",
+        {"user_id": ctx.message.author.id},
+    )
+    table = PrettyTable()
+    table.field_names = [
+        "fisher",
+        "fishies",
+        "trash",
+        "common",
+        "uncommon",
+        "rare",
+        "legendary",
+    ]
+    table.add_rows(query_fish_type_count)
+    if query_fish_sum is not None and query_fish_type_count is not None:
+        await ctx.send(
+            f"(you)'ve fished {query_fish_sum} digital fishy 🎣\n"
+            "```\n" + str(table) + "```"
+        )
 
 
 @bot.command()
@@ -303,7 +366,9 @@ if __name__ == "__main__":
     create table if not exists users (
         user_id bigint primary key,
         name varchar(255) not null,
-        discriminator int not null
+        discriminator int not null,
+        foreign key (user_id)
+            references fish(fisher_id)
         )
     """
     )

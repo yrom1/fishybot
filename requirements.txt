@@ -1,7 +1,9 @@
-mypy
+-e git+git://github.com/python/mypy.git#egg=mypy-git-master
+#mypy
 black
 isort
 discord.py
 discord.py-stubs
 mysql-connector-python
 prettytable
+
