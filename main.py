@@ -149,6 +149,8 @@ TRASH_ICONS = [
     ":newspaper2:",
 ]
 
+ALLOWED_FISH_TIME_DELTA = timedelta(seconds=10)
+
 
 @bot.command(aliases=["fish", "fihy", "fisy", "foshy", "fisyh", "fsihy", "fin"])
 async def fishy(ctx, user=None):
@@ -166,10 +168,9 @@ async def fishy(ctx, user=None):
     last_fish_time = last_fish_time[0][0]
     # print(f"{last_fish_time=}", f"{fish_time=}")
     # print(fish_time - last_fish_time)
-    allowed_fish_time_delta = timedelta(seconds=10)
-    if (fish_time - last_fish_time) < allowed_fish_time_delta:
+    if (fish_time - last_fish_time) < ALLOWED_FISH_TIME_DELTA:
         await ctx.send(
-            f"too fast cowboy 🏃 can fish in {(allowed_fish_time_delta - (fish_time - last_fish_time)).seconds} seconds 🎣"
+            f"too fast cowboy 🏃 can fish in {(ALLOWED_FISH_TIME_DELTA - (fish_time - last_fish_time)).seconds} seconds 🎣"
         )
         return
 
@@ -260,6 +261,30 @@ async def fishyboard(ctx):
     table.field_names = ["rank", "fisher", "fishies"]
     table.add_rows(result)
     await ctx.send("```\n" + str(table) + "```")
+
+
+@bot.command()
+async def fishytimer(ctx):
+    result = execute(
+        """
+        select max(fish_time) max_fish_time
+        from fish
+        where fisher_id = %(user_id)s
+        """,
+        {
+            "user_id": ctx.message.author.id,
+        },
+    )
+    if result is None:
+        await ctx.send("... you haven't fishy-ed❔")
+
+    last_fish_time = result[0][0]
+    if (time_to_fish := (datetime.now() - last_fish_time)) < ALLOWED_FISH_TIME_DELTA:
+        await ctx.send(
+            f"sailor you need to wait {time_to_fish.seconds} seconds to fishy 🕒🎣🕒"
+        )
+    else:
+        await ctx.send(f"you can fishy sailor!! 🚀🎣🚀")
 
 
 if __name__ == "__main__":
