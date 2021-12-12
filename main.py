@@ -22,21 +22,29 @@ FISH = """\
     `*-._`._(__.--*"`.\\
 """
 
+INTENTS = discord.Intents.default()
+INTENTS.members = True
+bot = commands.Bot(
+    command_prefix="$", intents=INTENTS
+)  # bot is conventionally lowercase
+
 
 def config(filename="config.ini", section="mysql") -> Dict[str, str]:
     parser = ConfigParser()
     parser.read(filename)
-    db = {}
+    config_dict: Dict[str, str] = {}  # TODO i think it's Optional[str] return?
     if parser.has_section(section):
-        params = parser.items(section)
-        for param in params:
-            db[param[0]] = param[1]
+        for item in parser.items(section):
+            key, value = item
+            config_dict[key] = value
     else:
         raise Exception(f"Section {section} not found in the {filename} file")
 
-    return db
+    return config_dict
 
 
+# TODO async
+# TODO pooling
 def execute(
     command: str, data: Union[Tuple[Any, ...], Dict[Any, Any]] = tuple()
 ) -> Optional[List[Tuple[Any, ...]]]:
@@ -58,11 +66,6 @@ def execute(
         conn.close()
 
     return result
-
-
-intents = discord.Intents.default()
-intents.members = True
-bot = commands.Bot(command_prefix="$", intents=intents)
 
 
 def trash():
@@ -209,7 +212,10 @@ async def fishy(ctx, user: discord.Member = None):
         },
     )
 
-    # await test(ctx)
+    if user is not None:
+        await ctx.send(
+            f"a gift from {'#'.join([ctx.message.author.name, ctx.message.author.discriminator])} to {'#'.join([user.name, user.discriminator])}"
+        )
 
     if fish_amount == 0:
         await ctx.send(f"you caught trash {random.choice(TRASH_ICONS)}")
