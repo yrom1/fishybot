@@ -162,7 +162,7 @@ ALLOWED_FISH_TIME_DELTA = timedelta(seconds=10)
 
 @bot.command(aliases=["fosh", "fish", "fihy", "fisy", "foshy", "fisyh", "fsihy", "fin"])
 async def fishy(ctx, user: discord.Member = None):
-    """Go fishing."""
+    """Go fishing"""
 
     # --- can we fish? ---
     query_last_fish_time = execute(
@@ -265,7 +265,7 @@ async def fishy(ctx, user: discord.Member = None):
 
 @bot.command(aliases=["globalfishstats", "globalfishysta", "globalfishystast"])
 async def globalfishystats(ctx):
-    """How many and of which type fish have the top fishers caught?"""
+    """Fishing leaderboard"""
     query_global_count = execute("select sum(fish_amount) from fish f")[0][0]
     query_fish_type_count = execute(
         """
@@ -292,6 +292,7 @@ async def globalfishystats(ctx):
     from users u
         left join total_fishies tf
             on u.user_id = tf.fisher_id
+    order by fishies desc
     """
     )
     table = PrettyTable()
@@ -318,7 +319,7 @@ async def globalfishystats(ctx):
     ]
 )
 async def fishystats(ctx):
-    """How many and of which type fish have you caught?"""
+    """Your fish total and type stats"""
     query_has_fished_before = execute(
         """
         select exists(
@@ -379,37 +380,9 @@ async def fishystats(ctx):
         )
 
 
-# @bot.command()
-# async def getuser(ctx, *, user: discord.Member = None, id: int = None):
-#     if user is not None:
-#         user_name = bot.get_user(user.id)  # (int(id))
-#         print(f"{user_name=}")
-
-
-@bot.command()
-async def fishyboard(ctx):
-    """Who is the best fisher-board?"""
-    cmd = """
-    select rank() over(order by sum(f.fish_amount) desc) `rank`
-        , u.name fisher
-        , sum(f.fish_amount) fishies
-    from fish f
-        inner join users u
-            on f.fisher_id = u.user_id
-    group by f.fisher_id
-    order by sum(f.fish_amount)
-    limit 10
-    """
-    result = execute(cmd)
-    table = PrettyTable()
-    table.field_names = ["rank", "fisher", "fishies"]
-    table.add_rows(result)
-    await ctx.send("```\n" + str(table) + "```")
-
-
 @bot.command()
 async def fishytimer(ctx):
-    """Time to next fishy for you."""
+    """Time to next fishy"""
     result = execute(
         """
         select max(fish_time) max_fish_time
