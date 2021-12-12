@@ -6,4 +6,4 @@ discord.py
 discord.py-stubs
 mysql-connector-python
 prettytable
-
+aiomysql

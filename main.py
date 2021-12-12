@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import random
 from configparser import ConfigParser
@@ -8,11 +9,12 @@ from functools import wraps
 from textwrap import dedent
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, Union
 
+# from mysql.connector import Error, MySQLConnection
+import aiomysql
 import discord
 from discord import user
 from discord.ext import commands
 from discord.utils import escape_markdown
-from mysql.connector import Error, MySQLConnection
 from prettytable import PrettyTable
 
 FISH = """\
@@ -43,25 +45,24 @@ def config(filename="config.ini", section="mysql") -> Dict[str, str]:
     return config_dict
 
 
-# TODO async
 # TODO pooling
-def execute(
+async def execute(
     command: str, data: Union[Tuple[Any, ...], Dict[Any, Any]] = tuple()
 ) -> List[Tuple[Any, ...]]:
     try:
-        conn = MySQLConnection(**config())
-        cursor = conn.cursor()
-        cursor.execute(command, data)
-        result = cursor.fetchall()
-        conn.commit()
+        conn = await aiomysql.connect(**config())
+        cursor = await conn.cursor()
+        await cursor.execute(command, data)
+        result = await cursor.fetchall()
+        await conn.commit()
 
-    except Error as e:
+    except Exception as e:
         if not None:
             print(f"{command=}")
         raise e
 
     finally:
-        cursor.close()
+        await cursor.close()
         conn.close()
 
     return result
@@ -165,7 +166,7 @@ async def fishy(ctx, user: discord.Member = None):
     """Go fishing"""
 
     # --- can we fish? ---
-    query_last_fish_time = execute(
+    query_last_fish_time = await execute(
         """
         SELECT MAX(fish_time)
         FROM fish
@@ -190,7 +191,9 @@ async def fishy(ctx, user: discord.Member = None):
     gift = False
     gifted_user_id = None
     if user is not None and user.id != ctx.message.author.id:
-        await ctx.send(f"a gift from {ctx.message.author.mention} to {user.mention}")
+        await ctx.send(
+            f"a gift from {ctx.message.author.mention} to {user.mention} :heart:"
+        )
         gift = True
         gifted_user_id = user.id
     elif user is not None and user.id == ctx.message.author.id:
@@ -209,7 +212,7 @@ async def fishy(ctx, user: discord.Member = None):
     # print(ctx.message.author.id)
     # print(ctx.message.author.name, "#", ctx.message.author.discriminator)
     # print(ctx.message.guild.id, ctx.message.guild.name)
-    execute(
+    await execute(
         """
         INSERT INTO users (user_id, name, discriminator)
         VALUES (%(user_id)s, %(name)s, %(discriminator)s)
@@ -225,7 +228,7 @@ async def fishy(ctx, user: discord.Member = None):
     )
 
     if gift and user is not None:
-        execute(
+        await execute(
             """
             INSERT INTO users (user_id, name, discriminator)
             VALUES (%(user_id)s, %(name)s, %(discriminator)s)
@@ -240,7 +243,7 @@ async def fishy(ctx, user: discord.Member = None):
             },
         )
 
-    execute(
+    await execute(
         """
         INSERT INTO fish (fisher_id, fish_time, fish_amount, gift, gifted_user_id)
         VALUES (%s, %s, %s, %s, %s)""",
@@ -266,8 +269,9 @@ async def fishy(ctx, user: discord.Member = None):
 @bot.command(aliases=["globalfishstats", "globalfishysta", "globalfishystast"])
 async def globalfishystats(ctx):
     """Fishing leaderboard"""
-    query_global_count = execute("select sum(fish_amount) from fish f")[0][0]
-    query_fish_type_count = execute(
+    query_global_count = await execute("select sum(fish_amount) from fish f")
+    query_global_count = query_global_count[0][0]
+    query_fish_type_count = await execute(
         """
     with cte as(
     select fisher_id
@@ -320,7 +324,7 @@ async def globalfishystats(ctx):
 )
 async def fishystats(ctx):
     """Your fish total and type stats"""
-    query_has_fished_before = execute(
+    query_has_fished_before = await execute(
         """
         select exists(
         select *
@@ -329,13 +333,14 @@ async def fishystats(ctx):
         ) id_exists
         """,
         tuple([ctx.message.author.id]),
-    )[0][0]
+    )
+    query_has_fished_before = query_has_fished_before[0][0]
     # print(f"{query_has_fished_before}")
     if not query_has_fished_before:
         await ctx.send("you need to fish once to have stats! 📊")
         return
 
-    query_fish_sum = execute(
+    query_fish_sum = await execute(
         """
         select sum(fish_amount)
         from fish
@@ -343,8 +348,9 @@ async def fishystats(ctx):
             and gift = false
         """,
         tuple([ctx.message.author.id]),
-    )[0][0]
-    query_fish_type_count = execute(
+    )
+    query_fish_sum = query_fish_sum[0][0]
+    query_fish_type_count = await execute(
         """
     select concat_ws('#', u.name, u.discriminator) `fisher`
         , sum(fish_amount) `fishies`
@@ -383,7 +389,7 @@ async def fishystats(ctx):
 @bot.command()
 async def fishytimer(ctx):
     """Time to next fishy"""
-    result = execute(
+    result = await execute(
         """
         select max(fish_time) max_fish_time
         from fish
@@ -417,27 +423,32 @@ async def on_ready():
 
 
 if __name__ == "__main__":
-    execute(
+
+    async def setup() -> None:
+        await execute(
+            """
+        create table if not exists users (
+            user_id bigint primary key,
+            name varchar(255) not null,
+            discriminator int not null
+            )
         """
-    create table if not exists users (
-        user_id bigint primary key,
-        name varchar(255) not null,
-        discriminator int not null
         )
-    """
-    )
-    execute(
+        await execute(
+            """
+        create table if not exists fish (
+            fisher_id bigint,
+            fish_time timestamp,
+            fish_amount int not null,
+            gift tinyint default 0 not null,
+            gifted_user_id bigint default null,
+            primary key(fisher_id, fish_time),
+            foreign key (fisher_id)
+                references users(user_id)
+            )
         """
-    create table if not exists fish (
-        fisher_id bigint,
-        fish_time timestamp,
-        fish_amount int not null,
-        gift tinyint default 0 not null,
-        gifted_user_id bigint default null,
-        primary key(fisher_id, fish_time),
-        foreign key (fisher_id)
-            references users(user_id)
         )
-    """
-    )
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(setup())
     bot.run(os.environ["DISCORD_FISH_TOKEN"])
