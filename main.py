@@ -1,5 +1,3 @@
-"""fishy <==<3"""
-
 from __future__ import annotations
 
 import os
@@ -14,8 +12,15 @@ import discord
 from discord import user
 from discord.ext import commands
 from discord.utils import escape_markdown
-from mysql.connector import Error, MySQLConnection, connect
+from mysql.connector import Error, MySQLConnection
 from prettytable import PrettyTable
+
+FISH = """\
+        /"*._         _
+    .-*'`    `*-.._.-'/
+< * ))     ,       (
+    `*-._`._(__.--*"`.\\
+"""
 
 
 def config(filename="config.ini", section="mysql") -> Dict[str, str]:
@@ -33,7 +38,7 @@ def config(filename="config.ini", section="mysql") -> Dict[str, str]:
 
 
 def execute(
-    command: str, data: Tuple[Any, ...] = tuple()
+    command: str, data: Union[Tuple[Any, ...], Dict[Any, Any]] = tuple()
 ) -> Optional[List[Tuple[Any, ...]]]:
     result = None
     try:
@@ -154,7 +159,7 @@ ALLOWED_FISH_TIME_DELTA = timedelta(seconds=10)
 
 
 @bot.command(aliases=["fosh", "fish", "fihy", "fisy", "foshy", "fisyh", "fsihy", "fin"])
-async def fishy(ctx, user=None):
+async def fishy(ctx, user: discord.Member = None):
     """Go fishing."""
 
     # --- can we fish? ---
@@ -164,26 +169,27 @@ async def fishy(ctx, user=None):
         FROM fish
         WHERE fisher_id = %s""",
         tuple([ctx.message.author.id]),
-    )[0][0]
+    )
     fish_time = datetime.now()
     if last_fish_time is not None:
+        last_fish_time_not_none = last_fish_time[0][0]
         # print(f"{last_fish_time=}", f"{fish_time=}")
         # print(fish_time - last_fish_time)
-        if (fish_time - last_fish_time) < ALLOWED_FISH_TIME_DELTA:
+        if (fish_time - last_fish_time_not_none) < ALLOWED_FISH_TIME_DELTA:
             await ctx.send(
-                f"too fast cowboy 🏃 can fish in {(ALLOWED_FISH_TIME_DELTA - (fish_time - last_fish_time)).seconds} seconds 🎣"
+                f"too fast cowboy 🏃 can fish in {(ALLOWED_FISH_TIME_DELTA - (fish_time - last_fish_time_not_none)).seconds} seconds 🎣"
             )
             return
 
     # --- we can fish! ---
-    fish_time = fish_time.strftime("%Y-%m-%d %H:%M:%S")
+    fish_time_formatted = fish_time.strftime("%Y-%m-%d %H:%M:%S")
     catch = random.choices(list(FISHTYPES.keys()), WEIGHTS)[0]
     fish_amount = FISHTYPES[catch]()
     execute(
         """
         INSERT INTO fish (fisher_id, fish_time, fish_amount)
         VALUES (%s, %s, %s)""",
-        tuple([ctx.message.author.id, fish_time, fish_amount]),
+        tuple([ctx.message.author.id, fish_time_formatted, fish_amount]),
     )
     # print(ctx.message.author.id)
     # print(ctx.message.author.name, "#", ctx.message.author.discriminator)
@@ -203,16 +209,19 @@ async def fishy(ctx, user=None):
         },
     )
 
+    # await test(ctx)
+
     if fish_amount == 0:
-        await ctx.send(f"(you) caught trash {random.choice(TRASH_ICONS)}")
+        await ctx.send(f"you caught trash {random.choice(TRASH_ICONS)}")
     else:
         await ctx.send(
-            f"(you) caught {fish_amount} {catch} fishy {(lambda x: '🐟' if x=='' else x)('🐟' * int(fish_amount // 10))}"
+            f"you caught {fish_amount} {catch} fishy {(lambda x: '🐟' if x=='' else x)('🐟' * int(fish_amount // 10))}"
         )
 
 
 @bot.command()
-async def globalfishstats(ctx):
+async def globalfishystats(ctx):
+    """How many and of which type fish have the top fishers caught?"""
     query_global_count = execute(
         "select sum(fish_amount) from fish f inner join users u on f.fisher_id = u.user_id"
     )[0][0]
@@ -260,7 +269,8 @@ async def globalfishstats(ctx):
         "finstats",
     ]
 )
-async def fishstats(ctx):
+async def fishystats(ctx):
+    """How many and of which type fish have you caught?"""
     query_fish_sum = execute(
         "select sum(fish_amount) from fish where fisher_id = %s",
         tuple([ctx.message.author.id]),
@@ -295,20 +305,21 @@ async def fishstats(ctx):
     table.add_rows(query_fish_type_count)
     if query_fish_sum is not None and query_fish_type_count is not None:
         await ctx.send(
-            f"(you)'ve fished {query_fish_sum} digital fishy 🎣\n"
+            f"you've fished {query_fish_sum} digital fishy 🎣\n"
             "```\n" + str(table) + "```"
         )
 
 
-@bot.command()
-async def getuser(ctx, *, user: discord.Member = None, id: int = None):
-    if user is not None:
-        user_name = bot.get_user(user.id)  # (int(id))
-        print(f"{user_name=}")
+# @bot.command()
+# async def getuser(ctx, *, user: discord.Member = None, id: int = None):
+#     if user is not None:
+#         user_name = bot.get_user(user.id)  # (int(id))
+#         print(f"{user_name=}")
 
 
 @bot.command()
 async def fishyboard(ctx):
+    """Who is the best fisher-board?"""
     cmd = """
     select rank() over(order by sum(f.fish_amount) desc) `rank`
         , u.name fisher
@@ -329,6 +340,7 @@ async def fishyboard(ctx):
 
 @bot.command()
 async def fishytimer(ctx):
+    """Time to next fishy for you."""
     result = execute(
         """
         select max(fish_time) max_fish_time
@@ -351,16 +363,15 @@ async def fishytimer(ctx):
         await ctx.send(f"you can fishy sailor!! 🚀🎣🚀")
 
 
+@bot.command()
+async def up(ctx):
+    """Is bot up?"""
+    await ctx.send("up! 🐠")
+
+
 @bot.event
 async def on_ready():
-    fish = dedent(
-        """\
-            /"*._         _
-        .-*'`    `*-.._.-'/
-     < * ))     ,       (
-        `*-._`._(__.--*"`.\\\n"""
-    )
-    print(fish)
+    print(FISH)
 
 
 if __name__ == "__main__":
