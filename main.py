@@ -48,7 +48,6 @@ def config(filename="config.ini", section="mysql") -> Dict[str, str]:
 def execute(
     command: str, data: Union[Tuple[Any, ...], Dict[Any, Any]] = tuple()
 ) -> List[Tuple[Any, ...]]:
-    result = None
     try:
         conn = MySQLConnection(**config())
         cursor = conn.cursor()
