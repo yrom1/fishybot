@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import random
 import sys
@@ -11,7 +12,6 @@ from functools import wraps
 from textwrap import dedent
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, Union
 
-# from mysql.connector import Error, MySQLConnection
 import aiomysql
 import discord
 from discord import user
@@ -31,6 +31,7 @@ INTENTS.members = True
 bot = commands.Bot(
     command_prefix="$", intents=INTENTS
 )  # bot is conventionally lowercase
+# time delta must be >= 1 to insert into fish table with unique key
 ALLOWED_FISH_TIME_DELTA = timedelta(seconds=1)
 
 if not sys.warnoptions:
@@ -185,9 +186,10 @@ async def fishy(ctx, user: discord.Member = None):
 
         # print(f"{last_fish_time=}", f"{fish_time=}")
         # print(fish_time - last_fish_time)
-        if (fish_time - last_fish_time) < ALLOWED_FISH_TIME_DELTA:
+        time_from_last_fish = fish_time - last_fish_time
+        if time_from_last_fish < ALLOWED_FISH_TIME_DELTA:
             await ctx.send(
-                f"too fast cowboy 🏃 can fish in {(ALLOWED_FISH_TIME_DELTA - (fish_time - last_fish_time)).seconds} seconds 🎣"
+                f"too fast sailor 🏃 can fish in {math.ceil((ALLOWED_FISH_TIME_DELTA - time_from_last_fish).microseconds / (10**6))} seconds 🎣"
             )
             return
 
