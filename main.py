@@ -31,7 +31,7 @@ INTENTS.members = True
 bot = commands.Bot(
     command_prefix="$", intents=INTENTS
 )  # bot is conventionally lowercase
-
+ALLOWED_FISH_TIME_DELTA = timedelta(seconds=1)
 
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
@@ -164,10 +164,10 @@ TRASH_ICONS = [
     ":newspaper2:",
 ]
 
-ALLOWED_FISH_TIME_DELTA = timedelta(seconds=10)
 
-
-@bot.command(aliases=["fosh", "fish", "fihy", "fisy", "foshy", "fisyh", "fsihy", "fin"])
+@bot.command(
+    aliases=["fosh", "fish", "fihy", "fisy", "foshy", "fisyh", "fsihy", "fin", "ifhs"]
+)
 async def fishy(ctx, user: discord.Member = None):
     """Go fishing"""
 
@@ -267,9 +267,31 @@ async def fishy(ctx, user: discord.Member = None):
     if fish_amount == 0:
         await ctx.send(f"you caught trash {random.choice(TRASH_ICONS)}")
     else:
-        await ctx.send(
-            f"you caught {fish_amount} {catch} fishy {(lambda x: '🐟' if x=='' else x)('🐟' * int(fish_amount // 10))}"
-        )
+        if catch == "common":
+            fish_emoji = random.choice(
+                [":fish:", ":tropical_fish:", ":blowfish:", ":shrimp:"]
+            )
+        elif catch == "uncommon":
+            fish_emoji = random.choice([":squid:", ":lobster:", ":crab:"])
+        elif catch == "rare":
+            fish_emoji = random.choice([":dolphin:", ":shark:"])
+        else:  # catch == "legendary":
+            fish_emoji = random.choice([":whale:", ":whale2:"])
+
+        def fish_emoji_multiplier(fish_amount: int) -> str:
+            return (lambda x: fish_emoji if x == "" else x)(
+                fish_emoji * int(fish_amount // 10)
+            )
+
+        if catch == "common" or catch == "uncommon":
+            catch_string = f"you caught {fish_amount} {catch} fishy {fish_emoji_multiplier(fish_amount)}"
+            await ctx.send(catch_string)
+        elif catch == "rare":
+            catch_string = f"**:star: you caught {fish_amount} {catch} fishy :star: {fish_emoji_multiplier(fish_amount)}**"
+            await ctx.send(catch_string)
+        else:  # catch == "legendary":
+            catch_string = f"**:star2: you caught {fish_amount} {catch} fishy :star2: {fish_emoji_multiplier(fish_amount)}**"
+            await ctx.send(catch_string)
 
 
 @bot.command(aliases=["globalfishstats", "globalfishysta", "globalfishystast"])
