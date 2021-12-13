@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import os
 import random
+import sys
+import warnings
 from configparser import ConfigParser
 from datetime import datetime, timedelta
 from functools import wraps
@@ -29,6 +31,10 @@ INTENTS.members = True
 bot = commands.Bot(
     command_prefix="$", intents=INTENTS
 )  # bot is conventionally lowercase
+
+
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
 
 
 def config(filename="config.ini", section="mysql") -> Dict[str, str]:
