@@ -308,7 +308,7 @@ async def globalfishystats(ctx):
         , fish_amount
     from fish
     where gift = 0
-    union
+    union all
     select gifted_user_id fisher_id
         , fish_amount
     from fish
