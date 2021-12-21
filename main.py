@@ -54,12 +54,15 @@ def config(filename="config.ini", section="mysql") -> Dict[str, str]:
 
 # TODO pooling
 async def execute(
-    command: str, data: Union[Tuple[Any, ...], Dict[Any, Any]] = tuple()
+    command: str, data: Union[Tuple[Any, ...],
+    Dict[Any, Any]] = tuple(),
+    rowcount = False,
 ) -> List[Tuple[Any, ...]]:
     try:
         conn = await aiomysql.connect(**config())
         cursor = await conn.cursor()
         await cursor.execute(command, data)
+        if rowcount: num_rows = cursor.rowcount
         result = await cursor.fetchall()
         await conn.commit()
 
@@ -72,6 +75,7 @@ async def execute(
         await cursor.close()
         conn.close()
 
+    if rowcount: return result, num_rows
     return result
 
 
@@ -172,30 +176,9 @@ TRASH_ICONS = [
 async def fishy(ctx, user: discord.Member = None):
     """Go fishing"""
 
-    # --- can we fish? ---
-    query_last_fish_time = await execute(
-        """
-        SELECT MAX(fish_time)
-        FROM fish
-        WHERE fisher_id = %s""",
-        tuple([ctx.message.author.id]),
-    )
-    last_fish_time = query_last_fish_time[0][0]
-    fish_time = datetime.now()
-    if last_fish_time is not None:
+    catch = random.choices(list(FISHTYPES.keys()), WEIGHTS)[0]
+    fish_amount = FISHTYPES[catch]()
 
-        # print(f"{last_fish_time=}", f"{fish_time=}")
-        # print(fish_time - last_fish_time)
-        time_from_last_fish = fish_time - last_fish_time
-        if time_from_last_fish < ALLOWED_FISH_TIME_DELTA:
-            await ctx.send(
-                f"too fast sailor 🏃 can fish in {math.ceil((ALLOWED_FISH_TIME_DELTA - time_from_last_fish).microseconds / (10**6))} seconds 🎣"
-            )
-            return
-
-    # --- we can fish! ---
-
-    # is it a gift
     gift = False
     gifted_user_id = None
     if user is not None and user.id != ctx.message.author.id:
@@ -208,18 +191,44 @@ async def fishy(ctx, user: discord.Member = None):
         await ctx.send(f"cant gift fish to yourself idiot")
         return
 
-    # if user is not None:
-    #     await ctx.send(
-    #         f"a gift from @{'#'.join([ctx.message.author.name, ctx.message.author.discriminator])} to @{'#'.join([user.name, user.discriminator])}"
-    #     )
 
-    fish_time_formatted = fish_time.strftime("%Y-%m-%d %H:%M:%S")
-    catch = random.choices(list(FISHTYPES.keys()), WEIGHTS)[0]
-    fish_amount = FISHTYPES[catch]()
+    _, insert_row_count = await execute(
+        """
+        insert into fish (fisher_id, fish_time, fish_amount, gift, gifted_user_id)
+        select %s, now(), %s, %s, %s
+        from fish
+        having time_to_sec(timediff(now(), max(time))) > 10
+        """,
+        tuple(
+            [
+                ctx.message.author.id,
+                fish_amount,
+                gift,
+                gifted_user_id,
+            ]
+        ),
+        rowcount=True,
+    )
+    print(f'{_=}', f'{insert_row_count=}')
+    if insert_row_count != 1:
+        query_time_to_next_fish = await execute("""
+        select max(fish_time)
+        from fish
+        where fisher_id = %(discord_id)s
+        """,
+        {
+            "discord_id": ctx.message.author.id,
+        })
 
-    # print(ctx.message.author.id)
-    # print(ctx.message.author.name, "#", ctx.message.author.discriminator)
-    # print(ctx.message.guild.id, ctx.message.guild.name)
+        print(f'{query_time_to_next_fish=}')
+        time_to_next_fish = query_time_to_next_fish[0][0].seconds
+
+        await ctx.send(
+            f"too fast sailor 🏃 can fish in {time_to_next_fish} seconds 🎣"
+        )
+        return
+
+
     await execute(
         """
         INSERT INTO users (user_id, name, discriminator)
@@ -250,21 +259,6 @@ async def fishy(ctx, user: discord.Member = None):
                 "discriminator": user.discriminator,
             },
         )
-
-    await execute(
-        """
-        INSERT INTO fish (fisher_id, fish_time, fish_amount, gift, gifted_user_id)
-        VALUES (%s, %s, %s, %s, %s)""",
-        tuple(
-            [
-                ctx.message.author.id,
-                fish_time_formatted,
-                fish_amount,
-                gift,
-                gifted_user_id,
-            ]
-        ),
-    )
 
     if fish_amount == 0:
         await ctx.send(f"you caught trash {random.choice(TRASH_ICONS)}")
