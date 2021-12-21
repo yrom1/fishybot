@@ -54,15 +54,16 @@ def config(filename="config.ini", section="mysql") -> Dict[str, str]:
 
 # TODO pooling
 async def execute(
-    command: str, data: Union[Tuple[Any, ...],
-    Dict[Any, Any]] = tuple(),
-    rowcount = False,
-) -> List[Tuple[Any, ...]]:
+    command: str,
+    data: Union[Tuple[Any, ...], Dict[Any, Any]] = tuple(),
+    rowcount=False,
+) -> Union[Tuple[Any, Any], List[Tuple[Any, ...]]]:
     try:
         conn = await aiomysql.connect(**config())
         cursor = await conn.cursor()
         await cursor.execute(command, data)
-        if rowcount: num_rows = cursor.rowcount
+        if rowcount:
+            num_rows = cursor.rowcount
         result = await cursor.fetchall()
         await conn.commit()
 
@@ -75,7 +76,8 @@ async def execute(
         await cursor.close()
         conn.close()
 
-    if rowcount: return result, num_rows
+    if rowcount:
+        return result, num_rows
     return result
 
 
@@ -191,13 +193,12 @@ async def fishy(ctx, user: discord.Member = None):
         await ctx.send(f"cant gift fish to yourself idiot")
         return
 
-
     _, insert_row_count = await execute(
         """
         insert into fish (fisher_id, fish_time, fish_amount, gift, gifted_user_id)
         select %s, now(), %s, %s, %s
         from fish
-        having time_to_sec(timediff(now(), max(time))) > 10
+        having time_to_sec(timediff(now(), max(fish_time))) > 10
         """,
         tuple(
             [
@@ -209,25 +210,23 @@ async def fishy(ctx, user: discord.Member = None):
         ),
         rowcount=True,
     )
-    print(f'{_=}', f'{insert_row_count=}')
+
     if insert_row_count != 1:
-        query_time_to_next_fish = await execute("""
-        select max(fish_time)
+        query_time_to_next_fish = await execute(
+            """
+        select 10 - time_to_sec(timediff(now(), max(fish_time)))
         from fish
         where fisher_id = %(discord_id)s
         """,
-        {
-            "discord_id": ctx.message.author.id,
-        })
-
-        print(f'{query_time_to_next_fish=}')
-        time_to_next_fish = query_time_to_next_fish[0][0].seconds
-
-        await ctx.send(
-            f"too fast sailor 🏃 can fish in {time_to_next_fish} seconds 🎣"
+            {
+                "discord_id": ctx.message.author.id,
+            },
         )
-        return
 
+        time_to_next_fish = (lambda x: 1 if x < 1 else x)(query_time_to_next_fish[0][0])
+
+        await ctx.send(f"too fast sailor 🏃 can fish in {time_to_next_fish} seconds 🎣")
+        return
 
     await execute(
         """
