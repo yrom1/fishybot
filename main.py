@@ -196,17 +196,19 @@ async def fishy(ctx, user: discord.Member = None):
     _, insert_row_count = await execute(
         """
         insert into fish (fisher_id, fish_time, fish_amount, gift, gifted_user_id)
-        select %s, now(), %s, %s, %s
+        select %(author_id)s, now(), %(fish_amount)s, %(gift)s, %(gifted_user_id)s
         from fish
-        having time_to_sec(timediff(now(), max(fish_time))) > 10
+        where fisher_id = %(discord_id)s
+        having not exists (select %(author_id)s from fish)
+            or time_to_sec(timediff(now(), max(fish_time)) > 10
         """,
         tuple(
-            [
-                ctx.message.author.id,
-                fish_amount,
-                gift,
-                gifted_user_id,
-            ]
+            {
+                'author_id': ctx.message.author.id,
+                'fish_amount': fish_amount,
+                'gift': gift,
+                'gifted_user_id': gifted_user_id,
+            }
         ),
         rowcount=True,
     )
