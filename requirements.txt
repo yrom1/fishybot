@@ -1,4 +1,4 @@
--e git+git://github.com/python/mypy.git#egg=mypy-git-master
+-e git+git://github.com/python/mypy.git#egg=mypy
 #mypy
 black
 isort
